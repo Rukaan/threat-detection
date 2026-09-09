@@ -100,6 +100,11 @@ LATERAL TABLE(ML_PREDICT('threat_triage',
 
 ## Paste your schema here
 
+Two Avro schemas, both registered in Schema Registry. Subjects
+`access_logs_raw-value` and `query_logs_v2-value`.
+
+### 1. AccessLog — authentication / access log (topic `access_logs_raw`)
+
 ```json
 {
   "namespace": "sim.security", "name": "AccessLog", "type": "record",
@@ -116,9 +121,32 @@ LATERAL TABLE(ML_PREDICT('threat_triage',
 }
 ```
 
-`QueryLog` mirrors this with: `event_time`, `user_id`, `session_id`, `client_ip`,
-`db_name`, `sql_text`, `rows_returned`, `duration_ms`. Both share the same `user_id`
-and IP pools — that shared identity is what makes the R4 interval join possible.
+### 2. QueryLog — database query audit log (topic `query_logs_v2`)
+
+```json
+{
+  "namespace": "sim.security", "name": "QueryLog", "type": "record",
+  "fields": [
+    {"name":"event_time","type":{"type":"long","format_as_time":"unix_long","arg.properties":{"iteration":{"start":1}}}},
+    {"name":"user_id","type":{"type":"string","arg.properties":{"options":["svc_batch","svc_etl","analyst_01","analyst_02","analyst_03","analyst_04","ops_01","ops_02","dba_01","dba_02","contractor_07"]}}},
+    {"name":"session_id","type":{"type":"string","arg.properties":{"options":["sess-1a2b3c4d","sess-2b3c4d5e","sess-3c4d5e6f","sess-4d5e6f70","sess-5e6f7081","sess-6f708192","sess-708192a3","sess-8192a3b4","sess-92a3b4c5","sess-a3b4c5d6","sess-b4c5d6e7","sess-c5d6e7f8"]}}},
+    {"name":"client_ip","type":{"type":"string","arg.properties":{"options":["10.12.4.11","10.12.4.12","10.12.4.19","10.12.8.31","10.12.8.44","172.16.3.7","172.16.3.9","203.0.113.44"]}}},
+    {"name":"db_name","type":{"type":"string","arg.properties":{"options":["billing","crm","network_inventory","reporting"]}}},
+    {"name":"sql_text","type":{"type":"string","arg.properties":{"options":["SELECT count(*) FROM invoices WHERE period = '2026-08'","SELECT status, count(*) FROM tickets GROUP BY status","SELECT site_id, region FROM cell_sites WHERE region = 'JKT'","UPDATE tickets SET status = 'closed' WHERE id = 4821","SELECT plan_code, count(*) FROM subscriptions GROUP BY plan_code","SELECT * FROM reporting.daily_rollup LIMIT 100"]}}},
+    {"name":"rows_returned","type":{"type":"int","arg.properties":{"range":{"min":0,"max":900}}}},
+    {"name":"duration_ms","type":{"type":"int","arg.properties":{"range":{"min":3,"max":2400}}}}
+  ]
+}
+```
+
+Both share the same `user_id` and `source_ip`/`client_ip` pools. That shared identity
+is what makes the R4 interval join possible — the same actor has to appear in both
+streams for the correlation to fire. `auth_result` is weighted 9:1 SUCCESS:FAILURE so
+the baseline sits just below R1's threshold and the injected attack is what pushes it
+over. `sql_text` is named that way because `statement` is a reserved word in Flink SQL.
+
+Both are registered in Schema Registry as AVRO by the Datagen connectors.
+
 
 ---
 
