@@ -80,12 +80,19 @@ WHERE a.auth_result = 'SUCCESS'
   AND q.rows_returned > 5000;
 
 -- AI model inference, applied ONLY to rule hits, never to raw logs.
+-- temperature=0 so the same signal yields the same verdict, making the demo
+-- reproducible. Registered successfully in the live environment.
 CREATE MODEL threat_triage
-INPUT (prompt STRING) OUTPUT (response STRING)
-WITH ('provider' = 'bedrock', 'task' = 'text_generation',
-      'bedrock.connection' = 'bedrock_claude_connection',
-      'bedrock.PARAMS.temperature' = '0',
-      'bedrock.system_prompt' = 'You are a SOC tier-2 analyst. Reply with ONLY a JSON object with keys: severity, confidence, mitre_technique, rationale, recommended_action, likely_false_positive.');
+INPUT  (prompt STRING)
+OUTPUT (response STRING)
+WITH (
+  'provider'                   = 'bedrock',
+  'task'                       = 'text_generation',
+  'bedrock.connection'         = 'bedrock_claude_connection',
+  'bedrock.PARAMS.max_tokens'  = '400',
+  'bedrock.PARAMS.temperature' = '0',
+  'bedrock.system_prompt'      = 'You are a SOC tier-2 analyst. You receive one security signal from a streaming detection pipeline over synthetic logs. Reply with ONLY a JSON object, no prose, with keys: severity (INFO|LOW|MEDIUM|HIGH|CRITICAL), confidence (0.0-1.0), mitre_technique (ATT&CK id and name, or "none"), rationale (max 30 words), recommended_action (max 20 words), likely_false_positive (true|false). Judge only on the evidence given; do not invent facts.'
+);
 
 INSERT INTO threat_alerts
 SELECT s.signal_id, s.detected_at, s.rule_id, s.user_id, s.source_ip, s.evidence,
