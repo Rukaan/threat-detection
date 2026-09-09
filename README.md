@@ -17,6 +17,9 @@ across both streams; only rule hits are sent to Claude on Amazon Bedrock via
                                                          ▼
                                                   alert_dispatch_log ─► email
 
+    Tableflow: security_signals + threat_alerts also materialize as Apache Iceberg
+    tables on managed storage, queryable from Athena / Trino / Snowflake.
+
 Rules run on every event; the model runs only on what the rules flag. Raw logs arrive
 at hundreds/second, signals at a handful/minute — that split is what keeps inference
 affordable.

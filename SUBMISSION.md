@@ -180,7 +180,27 @@ but not run against a live Zapier endpoint.
 
 ## Tableflow topic name
 
-Not used in this build.
+    security_signals
+    threat_alerts
+
+Both enabled as **Apache Iceberg** tables on Confluent-managed storage
+(`--storage-type MANAGED --table-formats ICEBERG`), on cluster `lkc-w72kxd5`.
+
+This is the analytics half of the story, and it is separate from the AI half.
+Bedrock inference works on the *live* stream, alert by alert, as events arrive.
+Tableflow materializes those same topics as Iceberg tables in object storage, so the
+detection history is queryable as a normal table from Athena, Trino, Snowflake or
+Databricks — no export job, no second pipeline, no copy to maintain.
+
+Concretely, that gives a SOC two things streaming alone cannot:
+
+- **An audit trail.** Every signal and every model verdict is retained as a queryable
+  table, which is what a security team needs when asked six months later why an alert
+  fired and what was done about it.
+- **Threshold tuning against history.** R3's original 20k-row threshold produced a
+  false positive for eight users at once. With the signal history in Iceberg, that
+  gets diagnosed with a `GROUP BY user_id` over weeks of data instead of being
+  guessed at from a live stream.
 
 ---
 
