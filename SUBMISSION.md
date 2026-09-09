@@ -26,7 +26,17 @@ Only the resulting signals reach the LLM. Claude Haiku on Amazon Bedrock is invo
 through Flink `ML_PREDICT` and returns severity, MITRE ATT&CK technique, a one-line
 rationale, a recommended action, and a `likely_false_positive` flag.
 
+A fourth layer closes the loop: a Flink **streaming agent** (`CREATE AGENT` +
+`AI_RUN_AGENT`) takes alerts the model rated HIGH or CRITICAL and not a likely false
+positive, composes an incident email, and sends it through a **Zapier MCP** Gmail
+tool. Alerts that the model marks a probable false positive never reach a human.
+
 **Who it is for:** SOC tier-1/tier-2 analysts.
+Three layers, each doing only what it is good at: SQL rules decide *something
+happened* (deterministic, provable, cheap); the model decides *how bad, why and what
+to do* (judgement, only on rule hits); the agent decides *who needs to know* and acts
+(side effects, gated on severity). Volume drops by orders of magnitude at every hop.
+
 **The benefit:** analysts receive triaged, explained alerts instead of raw log volume,
 and inference cost stays bounded because the deterministic rules do the filtering —
 raw logs arrive at hundreds/second, signals at a handful/minute. A control case in the
@@ -112,6 +122,34 @@ and IP pools — that shared identity is what makes the R4 interval join possibl
 
 ---
 
+## Streaming agent + MCP
+
+```sql
+CREATE CONNECTION zapier_mcp_connection
+WITH ('type' = 'mcp_server', 'endpoint' = '<ZAPIER_MCP_SSE_URL>', 'api-key' = '<KEY>');
+
+CREATE TOOL zapier_email_tool
+USING CONNECTION zapier_mcp_connection
+WITH ('type' = 'mcp', 'allowed_tools' = 'gmail_send_email', 'request_timeout' = '30');
+
+CREATE AGENT email_dispatch_agent
+USING MODEL threat_triage
+USING PROMPT 'You are a SOC alert dispatcher. Compose a concise incident email and send it with the gmail_send_email tool. Subject: "[<severity>] <rule_id> - <user_id>". Body: what was detected, the evidence verbatim, the MITRE technique, the recommended action. Send exactly one email, then stop.'
+USING TOOLS zapier_email_tool
+WITH ('max_iterations' = '5');
+
+INSERT INTO alert_dispatch_log
+SELECT a.signal_id, a.detected_at, a.rule_id, a.user_id,
+       JSON_VALUE(a.triage, '$.severity'), r.response
+FROM threat_alerts AS a,
+LATERAL TABLE(AI_RUN_AGENT('email_dispatch_agent', <alert text>, a.signal_id)) AS r
+WHERE JSON_VALUE(a.triage, '$.severity') IN ('HIGH','CRITICAL')
+  AND JSON_VALUE(a.triage, '$.likely_false_positive') <> 'true';
+```
+
+Full version: `flink/06-email-agent.sql`. Written to the documented Confluent syntax
+but not run against a live Zapier endpoint.
+
 ## Tableflow topic name
 
 Not used in this build.
@@ -147,3 +185,10 @@ All four rules RUNNING; signals confirmed by consuming `security_signals`:
 | R4_SUSPICIOUS_SESSION | 4 | `auth_method=password; agent=psql/15.3; then_query_db=crm; rows=48210` |
 
 Control case works: `analyst_02` fires R1 only (`failed_logins=5; method=sso`), never R4.
+
+**Honest status of the AI legs:** the four rules and the pipeline are verified running
+on live data. `CREATE MODEL threat_triage` registered successfully against Bedrock.
+The `ML_PREDICT` statement starts and runs once the output tables are append-only, but
+inference returned `HTTP 403 — Secrets on CONNECTION have expired or are invalid`, so
+`threat_alerts` is not yet populated; that is an AWS credential issue, not a pipeline
+one. The email agent (`06-email-agent.sql`) is written but not deployed.

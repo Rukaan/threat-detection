@@ -6,8 +6,16 @@ across both streams; only rule hits are sent to Claude on Amazon Bedrock via
 `ML_PREDICT` for triage.
 
     datagen ─► access_logs_raw ─┐
-                                ├─ Flink R1..R4 ─► security_signals ─ ML_PREDICT ─► threat_alerts
-    datagen ─► query_logs_v2   ─┘
+                                ├─ Flink R1..R4 ─► security_signals
+    datagen ─► query_logs_v2   ─┘                        │
+                                                  ML_PREDICT (Bedrock)
+                                                         ▼
+                                                   threat_alerts
+                                                         │  HIGH/CRITICAL
+                                                         │  and not a false positive
+                                                  AI_RUN_AGENT + Zapier MCP
+                                                         ▼
+                                                  alert_dispatch_log ─► email
 
 Rules run on every event; the model runs only on what the rules flag. Raw logs arrive
 at hundreds/second, signals at a handful/minute — that split is what keeps inference
@@ -30,6 +38,8 @@ that signal alone.
       03-bedrock-inference.sql     CREATE CONNECTION, CREATE MODEL, ML_PREDICT
       04-attack.sql                the simulated attack + a benign control case
       05-verify.sql                what fired, and how the model triaged it
+      06-email-agent.sql           streaming agent + Zapier MCP email dispatch
+                                   (written, NOT deployed — see the file header)
 
 ## Docs
 
@@ -46,5 +56,13 @@ that signal alone.
 3. `flink/02-detections.sql` — four separate statements, leave them running
 4. `flink/03-bedrock-inference.sql` — needs your AWS credentials
 5. `flink/04-attack.sql`, then `flink/05-verify.sql`
+6. `flink/06-email-agent.sql` — optional email leg. Untested; needs a Zapier MCP
+   URL, its API key, and a recipient address.
+
+Three layers, each doing only what it is good at: **SQL rules** decide *something
+happened* (deterministic, provable, cheap). **The model** decides *how bad, why, and
+what to do* (judgement, applied only to rule hits). **The agent** decides *who needs
+to know* and acts (side effects, gated on severity). Volume drops by orders of
+magnitude at every hop, which is what makes the expensive layers affordable.
 
 All data is synthetic. No real accounts, hosts, or customer data.
