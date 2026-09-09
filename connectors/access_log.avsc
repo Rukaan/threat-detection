@@ -1,0 +1,140 @@
+{
+  "namespace": "sim.security",
+  "name": "AccessLog",
+  "type": "record",
+  "fields": [
+    {
+      "name": "event_time",
+      "type": {
+        "type": "long",
+        "format_as_time": "unix_long",
+        "arg.properties": {
+          "iteration": {
+            "start": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "user_id",
+      "type": {
+        "type": "string",
+        "arg.properties": {
+          "options": [
+            "svc_batch",
+            "svc_etl",
+            "analyst_01",
+            "analyst_02",
+            "analyst_03",
+            "analyst_04",
+            "ops_01",
+            "ops_02",
+            "dba_01",
+            "dba_02",
+            "contractor_07"
+          ]
+        }
+      }
+    },
+    {
+      "name": "source_ip",
+      "type": {
+        "type": "string",
+        "arg.properties": {
+          "options": [
+            "10.12.4.11",
+            "10.12.4.12",
+            "10.12.4.19",
+            "10.12.8.31",
+            "10.12.8.44",
+            "172.16.3.7",
+            "172.16.3.9",
+            "203.0.113.44"
+          ]
+        }
+      }
+    },
+    {
+      "name": "auth_result",
+      "type": {
+        "type": "string",
+        "arg.properties": {
+          "options": [
+            "SUCCESS",
+            "SUCCESS",
+            "SUCCESS",
+            "SUCCESS",
+            "SUCCESS",
+            "SUCCESS",
+            "SUCCESS",
+            "SUCCESS",
+            "SUCCESS",
+            "FAILURE"
+          ]
+        }
+      }
+    },
+    {
+      "name": "auth_method",
+      "type": {
+        "type": "string",
+        "arg.properties": {
+          "options": [
+            "password",
+            "password",
+            "mfa",
+            "sso",
+            "api_key"
+          ]
+        }
+      }
+    },
+    {
+      "name": "service",
+      "type": {
+        "type": "string",
+        "arg.properties": {
+          "options": [
+            "vpn",
+            "jumphost",
+            "warehouse",
+            "admin_console",
+            "api_gateway"
+          ]
+        }
+      }
+    },
+    {
+      "name": "geo_country",
+      "type": {
+        "type": "string",
+        "arg.properties": {
+          "options": [
+            "ID",
+            "ID",
+            "ID",
+            "ID",
+            "ID",
+            "SG",
+            "MY"
+          ]
+        }
+      }
+    },
+    {
+      "name": "user_agent",
+      "type": {
+        "type": "string",
+        "arg.properties": {
+          "options": [
+            "Mozilla/5.0 (Macintosh)",
+            "Mozilla/5.0 (Windows NT 10.0)",
+            "psql/15.3",
+            "python-requests/2.31",
+            "curl/8.4.0"
+          ]
+        }
+      }
+    }
+  ]
+}
